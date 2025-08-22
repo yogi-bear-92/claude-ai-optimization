@@ -1,0 +1,83 @@
+name: Claude AI Optimization CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Daily cost optimization check
+    - cron: '0 9 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e ".[dev]"
+    
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Type check with mypy
+      run: |
+        mypy . --ignore-missing-imports
+    
+    - name: Test agent configuration
+      run: |
+        python scripts/setup-optimal-agents.py --dry-run --validate
+    
+    - name: Test cost tracking
+      run: |
+        python monitoring/cost-tracker.py --test-mode
+    
+    - name: Test GitHub automation
+      run: |
+        python scripts/test-issue-automation.py --test-mode
+    
+    - name: Test webhook handler
+      run: |
+        python -m pytest integrations/github-webhook-handler.py -v
+
+  cost-optimization-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Generate cost optimization report
+      env:
+        CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      run: |
+        python monitoring/cost-tracker.py --report
+    
+    - name: Check budget alerts
+      run: |
+        python monitoring/cost-tracker.py --budget-check

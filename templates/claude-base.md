@@ -48,6 +48,7 @@ This project integrates with:
 - **PRPs-agentic-eng**: Process-driven engineering workflows
 - **claude-hub**: GitHub integration and webhook automation
 - **data-for-seo**: SEO optimization and content strategies
+- **github-issue-automation**: Automated GitHub issue management and execution
 
 ### Monitoring & Alerts
 - **Dashboard**: ccflare running at http://localhost:8080
@@ -68,6 +69,12 @@ python monitoring/cost-tracker.py --report
 
 # View agent configuration
 python scripts/setup-optimal-agents.py --dry-run
+
+# Test GitHub issue automation
+python scripts/test-issue-automation.py --test-mode
+
+# Start GitHub webhook handler
+python integrations/github-webhook-handler.py --port 8000
 ```
 
 ### Expected Outcomes

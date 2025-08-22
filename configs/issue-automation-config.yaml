@@ -1,0 +1,268 @@
+# GitHub Issue Automation Configuration
+# Integrates with Claude AI optimization framework for automated issue resolution
+
+version: "1.1"
+created: "2025-01-21"
+description: "Automated GitHub issue management with intelligent agent coordination"
+
+# Issue Classification & Routing
+issue_classification:
+  confidence_thresholds:
+    auto_execute: 0.8    # Automatically execute if confidence >= 80%
+    manual_review: 0.5   # Manual review required if confidence < 50%
+    human_only: 0.3      # Human-only if confidence < 30%
+  
+  complexity_scoring:
+    content_weight: 0.3   # Weight for content length analysis
+    label_weight: 0.2     # Weight for label analysis  
+    keyword_weight: 0.5   # Weight for complexity keywords
+    
+  priority_escalation:
+    critical: 
+      auto_execute: false    # Never auto-execute critical issues
+      human_approval: true   # Always require human approval
+    high:
+      auto_execute: true     # Allow if confidence > 0.9
+      human_approval: true   # Require approval for major changes
+    medium:
+      auto_execute: true     # Allow if confidence > 0.8
+      human_approval: false  # No approval needed
+    low:
+      auto_execute: true     # Allow if confidence > 0.6
+      human_approval: false  # No approval needed
+
+# Agent Routing Matrix
+agent_routing:
+  bug_fixes:
+    primary_agent: "debugger"
+    support_agents: ["code-reviewer", "test-automator"]
+    model: "sonnet"
+    max_execution_time: "2 hours"
+    quality_gates: ["unit_tests", "integration_tests", "code_review"]
+    
+  feature_requests:
+    primary_agent: "backend-architect"
+    support_agents: ["python-expert", "typescript-expert", "code-reviewer"]
+    model: "opus"  # Architecture requires maximum capability
+    max_execution_time: "8 hours"
+    quality_gates: ["architecture_review", "unit_tests", "integration_tests", "code_review"]
+    
+  security_issues:
+    primary_agent: "security-auditor"
+    support_agents: ["code-reviewer", "devops-troubleshooter"]
+    model: "opus"  # Security requires maximum capability
+    max_execution_time: "4 hours"
+    quality_gates: ["security_review", "penetration_test", "code_review"]
+    auto_execute: false  # Always require human approval
+    
+  performance_issues:
+    primary_agent: "performance-engineer"
+    support_agents: ["database-optimizer", "devops-troubleshooter"]
+    model: "opus"  # Performance optimization requires maximum capability
+    max_execution_time: "6 hours"
+    quality_gates: ["performance_test", "load_test", "code_review"]
+    
+  documentation_requests:
+    primary_agent: "comprehensive-researcher"
+    support_agents: ["technical-writer"]
+    model: "haiku"  # Documentation is cost-effective with haiku
+    max_execution_time: "1 hour"
+    quality_gates: ["content_review", "link_validation"]
+    
+  infrastructure_issues:
+    primary_agent: "devops-troubleshooter"
+    support_agents: ["docker-expert", "kubernetes-expert"]
+    model: "sonnet"
+    max_execution_time: "4 hours"
+    quality_gates: ["infrastructure_test", "deployment_test", "monitoring_check"]
+
+# Automation Workflows
+automation_workflows:
+  issue_analysis:
+    steps:
+      - "Extract issue metadata and content"
+      - "Classify issue type using NLP analysis"
+      - "Determine priority based on labels and keywords"
+      - "Calculate complexity score"
+      - "Assess automation confidence"
+      - "Route to appropriate primary agent"
+    
+    validation:
+      - "Issue type classification accuracy > 85%"
+      - "Priority assignment matches human judgment"
+      - "Agent routing aligns with expertise requirements"
+    
+  execution_pipeline:
+    steps:
+      - "Create feature/bugfix branch"
+      - "Set up execution environment"
+      - "Execute primary agent workflow"
+      - "Coordinate support agent contributions"
+      - "Run quality gate validations"
+      - "Generate comprehensive testing"
+      - "Create pull request with detailed description"
+    
+    rollback_triggers:
+      - "Quality gate failures"
+      - "Execution timeout exceeded"
+      - "Critical error during implementation"
+      - "Human intervention requested"
+    
+  quality_assurance:
+    automated_testing:
+      unit_tests: true
+      integration_tests: true
+      security_scans: true
+      performance_tests: true
+      
+    code_review:
+      automated_review: true  # Use code-reviewer agent
+      human_review_required: 
+        - security_issues
+        - critical_priority
+        - high_complexity_score
+        
+    validation_criteria:
+      test_coverage: "> 80%"
+      security_score: "> 95%"
+      performance_regression: "< 5%"
+      code_quality_score: "> 85%"
+
+# Cost Optimization
+cost_optimization:
+  model_selection_strategy:
+    documentation: "haiku"      # 90% cost savings
+    simple_bugs: "haiku"        # For obvious fixes
+    standard_development: "sonnet"  # Balanced capability/cost
+    architecture_design: "opus"     # Maximum capability needed
+    security_analysis: "opus"       # Maximum capability needed
+    performance_optimization: "opus" # Maximum capability needed
+    
+  budget_controls:
+    daily_limit: 100.0          # $100/day for automation
+    per_issue_limit: 25.0       # $25/issue maximum
+    alert_thresholds:
+      warning: 75.0             # Alert at $75/day
+      critical: 90.0            # Critical alert at $90/day
+      
+  efficiency_optimizations:
+    parallel_execution: true     # Run compatible agents in parallel
+    context_reuse: true         # Share context between related agents
+    smart_caching: true         # Cache common analysis results
+    batch_processing: true      # Process multiple similar issues together
+
+# Integration Settings
+github_integration:
+  webhook_events:
+    - "issues.opened"
+    - "issues.labeled"
+    - "issues.assigned"
+    
+  comment_templates:
+    analysis_complete: |
+      ## 🤖 Automated Analysis Complete
+      
+      **Issue Type:** {issue_type}
+      **Priority:** {priority}
+      **Complexity:** {complexity_score}/1.0
+      **Primary Agent:** {primary_agent}
+      **Automation Confidence:** {confidence}%
+      
+      **Execution Plan:**
+      {execution_steps}
+      
+      **Estimated Cost:** ${estimated_cost}
+      **Estimated Duration:** {estimated_duration}
+      
+      {approval_status}
+      
+    execution_started: |
+      ## 🚀 Automated Execution Started
+      
+      **Branch:** {branch_name}
+      **Primary Agent:** {primary_agent}
+      **Support Agents:** {support_agents}
+      
+      **Progress will be updated here...**
+      
+    execution_complete: |
+      ## ✅ Automated Resolution Complete
+      
+      **Pull Request:** #{pr_number}
+      **Execution Time:** {execution_time}
+      **Quality Gates:** {quality_status}
+      **Cost:** ${actual_cost}
+      
+      **Validation Required:**
+      {validation_checklist}
+      
+  status_labels:
+    analyzing: "🤖 ai-analyzing"
+    executing: "🚀 ai-executing"
+    completed: "✅ ai-completed"
+    failed: "❌ ai-failed"
+    manual_review: "👥 manual-review-needed"
+
+# Monitoring & Analytics
+monitoring:
+  success_metrics:
+    automation_rate: "> 60%"        # >60% of issues automated
+    success_rate: "> 85%"           # >85% successful executions
+    resolution_time: "< 24 hours"   # <24h average resolution
+    cost_per_issue: "< $20"         # <$20 average cost per issue
+    
+  performance_tracking:
+    issue_throughput: true          # Track issues per day
+    agent_utilization: true         # Track agent usage patterns
+    cost_efficiency: true           # Track cost per resolution
+    quality_metrics: true           # Track quality gate success rates
+    
+  alerting:
+    slack_notifications: true       # Alert team on Slack
+    email_reports: true            # Daily/weekly email summaries
+    dashboard_integration: true     # ccflare dashboard integration
+    
+  retention_policies:
+    execution_logs: "30 days"
+    performance_metrics: "90 days"
+    cost_tracking: "1 year"
+    audit_trail: "2 years"
+
+# Security & Compliance
+security:
+  access_controls:
+    github_token_rotation: "monthly"
+    webhook_secret_validation: true
+    execution_sandboxing: true
+    audit_logging: "comprehensive"
+    
+  safety_mechanisms:
+    dry_run_mode: true             # Test before execution
+    human_approval_gates: true     # Critical issue approval
+    rollback_capability: true      # Quick rollback on issues
+    rate_limiting: true            # Prevent system overload
+    
+  compliance:
+    data_privacy: "gdpr_compliant"
+    audit_trail: "comprehensive"
+    change_tracking: "git_based"
+    approval_workflow: "documented"
+
+# Team Collaboration
+team_settings:
+  notification_preferences:
+    issue_analysis: ["maintainers"]
+    execution_start: ["assignee", "maintainers"]
+    execution_complete: ["assignee", "reviewers", "maintainers"]
+    execution_failed: ["maintainers", "on-call"]
+    
+  approval_workflows:
+    security_issues: ["security-team", "lead-developer"]
+    critical_issues: ["lead-developer", "product-owner"]
+    architecture_changes: ["architecture-team"]
+    performance_changes: ["performance-team"]
+    
+  escalation_policies:
+    timeout: "escalate to maintainers after 30 minutes"
+    failure: "escalate to on-call after 3 failures"
+    critical: "immediate escalation to leadership"
