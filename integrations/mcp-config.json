@@ -1,0 +1,109 @@
+{
+  "description": "Optimized MCP server configuration for Claude AI development workflow",
+  "version": "1.0",
+  "created": "2025-01-21",
+  
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub integration for PR automation and code review",
+      "priority": "critical",
+      "features": [
+        "pr_automation",
+        "issue_tracking",
+        "code_review",
+        "repository_management"
+      ]
+    },
+    
+    "docker": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-docker"],
+      "description": "Docker container management and deployment",
+      "priority": "high",
+      "features": [
+        "container_management",
+        "image_building",
+        "deployment_automation",
+        "monitoring"
+      ]
+    },
+    
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-filesystem"],
+      "description": "Enhanced file system operations",
+      "priority": "high",
+      "features": [
+        "file_operations",
+        "directory_management",
+        "search_capabilities",
+        "permission_handling"
+      ]
+    },
+    
+    "monitoring": {
+      "command": "node",
+      "args": ["/Users/yogi/Projects/vlada/Ai/claude-ai-optimization/monitoring/mcp-monitoring-server.js"],
+      "description": "Usage tracking and cost monitoring MCP server",
+      "priority": "medium",
+      "features": [
+        "usage_analytics",
+        "cost_tracking",
+        "performance_metrics",
+        "alert_management"
+      ]
+    }
+  },
+  
+  "configuration": {
+    "auto_restart": true,
+    "health_check_interval": 30,
+    "timeout": 30000,
+    "retry_attempts": 3,
+    "log_level": "info"
+  },
+  
+  "optimization_settings": {
+    "context_management": {
+      "auto_clear_threshold": "40_minutes",
+      "preload_project_context": true,
+      "enable_response_caching": true
+    },
+    
+    "model_routing": {
+      "documentation_tasks": "haiku",
+      "formatting_tasks": "haiku",
+      "development_work": "sonnet",
+      "architecture_design": "opus",
+      "latest_features": "sonnet-4"
+    },
+    
+    "cost_controls": {
+      "daily_budget_limit": 50.0,
+      "weekly_budget_limit": 300.0,
+      "alert_thresholds": {
+        "warning": 0.8,
+        "critical": 0.95
+      },
+      "auto_optimize": true
+    }
+  },
+  
+  "integration_points": {
+    "vlada_ai_projects": [
+      "/Users/yogi/Projects/vlada/Ai/agent-factory",
+      "/Users/yogi/Projects/vlada/Ai/PRPs-agentic-eng",
+      "/Users/yogi/Projects/vlada/Ai/claude-hub",
+      "/Users/yogi/Projects/vlada/Ai/data-for-seo"
+    ],
+    
+    "shared_configurations": true,
+    "cross_project_monitoring": true,
+    "unified_cost_tracking": true
+  }
+}

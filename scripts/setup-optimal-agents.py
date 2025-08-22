@@ -89,7 +89,14 @@ class AgentOptimizer:
         # Destination is always root level for simplicity
         dest_path = self.claude_agents_dir / f"{agent_name}.md"
         
-        # Copy the agent file
+        # Check if source and destination are the same (agent already in root)
+        if source_path.resolve() == dest_path.resolve():
+            console.print(f"✅ Agent already in optimal location: {agent_name}", style="yellow")
+            # Just update the model assignment
+            self.update_agent_model(dest_path, model)
+            return True
+        
+        # Copy the agent file only if different locations
         shutil.copy2(source_path, dest_path)
         
         # Update model assignment if needed
