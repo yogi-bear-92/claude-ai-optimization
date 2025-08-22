@@ -1,0 +1,175 @@
+# Optimal Claude AI Agent Configuration
+# Based on comprehensive analysis of 600+ agents across 4 collections
+
+version: "1.0"
+created: "2025-01-21"
+description: "Optimized agent selection for maximum development efficiency"
+
+# Primary Foundation - Comprehensive Collection Agents
+foundation_agents:
+  # Core Development Workflow
+  - name: "comprehensive-researcher"
+    collection: "comprehensive" 
+    model: "sonnet"
+    priority: "critical"
+    use_cases: ["analysis", "research", "synthesis"]
+    
+  - name: "code-reviewer"
+    collection: "comprehensive"
+    model: "sonnet"
+    priority: "critical"
+    use_cases: ["quality_assurance", "security_review", "best_practices"]
+    
+  - name: "backend-architect" 
+    collection: "comprehensive"
+    model: "opus"
+    priority: "critical"
+    use_cases: ["system_design", "api_architecture", "scalability"]
+    
+  - name: "performance-engineer"
+    collection: "comprehensive"
+    model: "opus"
+    priority: "high"
+    use_cases: ["optimization", "profiling", "scaling"]
+    
+  - name: "security-auditor"
+    collection: "comprehensive"
+    model: "opus"
+    priority: "high"
+    use_cases: ["vulnerability_assessment", "security_review", "compliance"]
+
+# Specialized Technology Experts - Mega-pack Collection
+technology_specialists:
+  # Core Languages
+  - name: "python-expert"
+    collection: "mega-pack"
+    model: "sonnet-4"
+    priority: "high"
+    use_cases: ["python_development", "data_science", "automation"]
+    
+  - name: "typescript-expert"
+    collection: "mega-pack"
+    model: "sonnet-4"
+    priority: "high"
+    use_cases: ["frontend", "fullstack", "type_safety"]
+    
+  - name: "rust-expert"
+    collection: "mega-pack"
+    model: "sonnet-4"
+    priority: "medium"
+    use_cases: ["systems_programming", "performance", "memory_safety"]
+
+  # Infrastructure & DevOps
+  - name: "docker-expert"
+    collection: "mega-pack"
+    model: "sonnet"
+    priority: "high"
+    use_cases: ["containerization", "deployment", "orchestration"]
+    
+  - name: "kubernetes-expert"
+    collection: "mega-pack"
+    model: "sonnet"
+    priority: "medium"
+    use_cases: ["orchestration", "scaling", "cloud_native"]
+
+  # Database
+  - name: "postgres-expert"
+    collection: "mega-pack"
+    model: "sonnet"
+    priority: "medium"
+    use_cases: ["database_design", "query_optimization", "administration"]
+
+# Advanced Orchestration - AI-Team Collection
+orchestration_agents:
+  - name: "tech-lead-orchestrator"
+    collection: "ai-team"
+    model: "opus"
+    priority: "high"
+    use_cases: ["project_coordination", "strategic_planning", "delegation"]
+    
+  - name: "project-analyst"
+    collection: "ai-team"
+    model: "sonnet"
+    priority: "medium"
+    use_cases: ["requirements_analysis", "architecture_review", "planning"]
+
+# Utility & Automation
+utility_agents:
+  - name: "devops-troubleshooter"
+    collection: "comprehensive"
+    model: "sonnet"
+    priority: "high"
+    use_cases: ["incident_response", "debugging", "infrastructure"]
+    
+  - name: "test-automator"
+    collection: "comprehensive"
+    model: "sonnet"
+    priority: "medium"
+    use_cases: ["test_creation", "qa_automation", "coverage"]
+    
+  - name: "ai-engineer"
+    collection: "comprehensive"
+    model: "opus"
+    priority: "high"
+    use_cases: ["llm_integration", "ml_workflows", "ai_architecture"]
+
+# Cost Optimization Settings
+model_assignment_strategy:
+  haiku:
+    use_for: ["documentation", "seo", "basic_analysis", "simple_tasks"]
+    estimated_cost: "low"
+    
+  sonnet:
+    use_for: ["development", "code_review", "standard_workflows", "infrastructure"]
+    estimated_cost: "medium"
+    
+  opus:
+    use_for: ["architecture", "security", "ai_ml", "complex_reasoning"]
+    estimated_cost: "high"
+    
+  sonnet-4:
+    use_for: ["latest_tech", "cutting_edge", "advanced_features"]
+    estimated_cost: "premium"
+
+# Workflow Patterns
+workflows:
+  feature_development:
+    sequence:
+      - "project-analyst"        # Requirements analysis
+      - "backend-architect"      # System design
+      - "python-expert"          # Implementation
+      - "test-automator"         # Testing
+      - "code-reviewer"          # Quality assurance
+      - "security-auditor"       # Security review
+      
+  infrastructure_setup:
+    sequence:
+      - "comprehensive-researcher" # Research and planning
+      - "devops-troubleshooter"   # Infrastructure design
+      - "docker-expert"           # Containerization
+      - "kubernetes-expert"       # Orchestration
+      - "security-auditor"        # Security hardening
+      
+  performance_optimization:
+    sequence:
+      - "performance-engineer"    # Profiling and analysis
+      - "database-optimizer"      # Database tuning
+      - "code-reviewer"           # Code optimization
+      - "devops-troubleshooter"   # Infrastructure tuning
+
+# Integration Settings
+integrations:
+  mcp_servers:
+    enabled: true
+    priority_servers: ["github", "docker", "aws", "monitoring"]
+    
+  project_scope:
+    vlada_ai_projects:
+      - "agent-factory"
+      - "PRPs-agentic-eng"
+      - "claude-hub"
+      - "data-for-seo"
+      
+  validation:
+    required_checks: ["frontmatter", "model_assignment", "use_cases"]
+    auto_fix: true
