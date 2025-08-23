@@ -1,0 +1,34 @@
+name: Simple Smart Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  simple-analysis:
+    name: Simple Smart Auto-Merge Test
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Test Smart Auto-Merge Logic
+        run: |
+          echo "🤖 Simple Smart Auto-Merge workflow triggered!"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "This would be where AI analysis happens"
+      
+      - name: Post comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 Simple Smart Auto-Merge workflow working! This would trigger AI analysis.'
+            });
