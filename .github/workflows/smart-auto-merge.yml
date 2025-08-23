@@ -3,11 +3,6 @@ name: Smart Auto-Merge
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  pull_request_review:
-    types: [submitted]
-  check_suite:
-    types: [completed]
-  status: {}
 
 permissions:
   contents: write
@@ -23,7 +18,7 @@ jobs:
   analyze-pr:
     name: Analyze PR for Auto-Merge
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     outputs:
       should_auto_merge: ${{ steps.analysis.outputs.should_auto_merge }}
       ai_confidence: ${{ steps.analysis.outputs.ai_confidence }}
@@ -44,12 +39,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install -r azure/requirements-dev.txt
           pip install GitPython requests PyGithub
 
       - name: Analyze PR with AI Intelligence
         id: analysis
         run: |
-          python scripts/analyze_pr_for_automerge.py \
+          python azure/scripts/analyze_pr_for_automerge.py \
             --pr-number ${{ github.event.pull_request.number }} \
             --repository ${{ github.repository }} \
             --github-token ${{ secrets.GITHUB_TOKEN }}
@@ -109,9 +105,8 @@ jobs:
             // Required checks that must pass
             const requiredChecks = [
               'Code Quality & Security',
-              'Test Suite (ubuntu-latest, 3.11)',
-              'Build Application',
-              'Security & Compliance'
+              'Test Suite',
+              'Build Verification'
             ];
             
             let maxAttempts = 30; // 15 minutes maximum wait

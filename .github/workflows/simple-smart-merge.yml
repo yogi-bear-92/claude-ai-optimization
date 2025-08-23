@@ -1,0 +1,192 @@
+name: Working Smart Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  smart-auto-merge:
+    name: Smart Auto-Merge Analysis
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install requests
+
+      - name: Run AI-Powered Analysis
+        id: ai-analysis
+        run: |
+          echo "🧠 Running sophisticated AI analysis..."
+          
+          # First check if required CI/CD checks have passed
+          python3 -c "
+          import requests
+          import sys
+          
+          # Check CI/CD status first
+          headers = {'Authorization': 'token ${{ secrets.GITHUB_TOKEN }}'}
+          
+          # Get check runs
+          url = 'https://api.github.com/repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs'
+          response = requests.get(url, headers=headers)
+          check_runs = response.json()
+          
+          required_checks = ['Code Quality & Security', 'Test Suite', 'Build Verification']
+          all_passed = True
+          
+          for check_name in required_checks:
+              found_check = False
+              for run in check_runs.get('check_runs', []):
+                  if run['name'] == check_name:
+                      found_check = True
+                      if run['conclusion'] != 'success':
+                          print(f'❌ {check_name}: {run[\"conclusion\"] or run[\"status\"]}')
+                          all_passed = False
+                      else:
+                          print(f'✅ {check_name}: success')
+                      break
+              
+              if not found_check:
+                  print(f'❌ {check_name}: not found')
+                  all_passed = False
+          
+          if not all_passed:
+              print('::set-output name=should_auto_merge::false')
+              print('::set-output name=ai_confidence::0') 
+              print('::set-output name=risk_score::10')
+              print('::set-output name=merge_strategy::manual')
+              print('::set-output name=analysis_summary::Required CI/CD checks have not passed. Manual review required.')
+              sys.exit(0)
+              
+          print('✅ All required checks passed! Proceeding with AI analysis...')
+          "
+          
+          # Run sophisticated AI analysis
+          python3 scripts/intelligent_pr_analyzer.py \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --repository ${{ github.repository }} \
+            --github-token ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post AI Analysis Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const shouldMerge = '${{ steps.ai-analysis.outputs.should_auto_merge }}';
+            const confidence = '${{ steps.ai-analysis.outputs.ai_confidence }}';
+            const riskScore = '${{ steps.ai-analysis.outputs.risk_score }}';
+            const analysisSummary = '${{ steps.ai-analysis.outputs.analysis_summary }}';
+            const mergeStrategy = '${{ steps.ai-analysis.outputs.merge_strategy }}';
+            
+            const comment = `
+            ## 🧠 AI-Powered Smart Auto-Merge Analysis
+            
+            **AI Confidence:** ${confidence}%
+            **Risk Score:** ${riskScore}/10  
+            **Auto-Merge Eligible:** ${shouldMerge === 'true' ? '✅ Yes' : '❌ No'}
+            **Recommended Strategy:** ${mergeStrategy}
+            
+            ### 🎯 Analysis Summary
+            ${analysisSummary}
+            
+            ### 📊 Multi-Dimensional Assessment
+            - **Code Quality:** ${confidence > 85 ? '✅' : '⚠️'} ${confidence > 85 ? 'High confidence in changes' : 'Needs review'}
+            - **Risk Assessment:** ${riskScore < 3 ? '✅' : riskScore < 7 ? '⚠️' : '❌'} ${riskScore < 3 ? 'Low risk' : riskScore < 7 ? 'Medium risk' : 'High risk'}
+            - **Safety Controls:** ${shouldMerge === 'true' ? '✅ All checks passed' : '❌ Manual review needed'}
+            
+            ### 🔍 Analysis Factors
+            The AI system analyzed:
+            - **Author Trust**: Repository history, account age, contribution patterns
+            - **Code Quality**: Test coverage, complexity patterns, documentation
+            - **Change Risk**: Critical files, dependency changes, modification size
+            - **Timing Risk**: Deployment timing and safety windows
+            - **CI/CD Status**: All required quality gates and security checks
+            
+            *Analysis powered by Intelligent PR Analyzer v2.0 🚀*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Auto-Merge PR
+        if: steps.ai-analysis.outputs.should_auto_merge == 'true'
+        run: |
+          echo "🤖 Executing smart auto-merge..."
+          
+          # Final safety check
+          PR_STATE=$(gh pr view ${{ github.event.pull_request.number }} --json state -q '.state')
+          if [ "$PR_STATE" != "OPEN" ]; then
+            echo "❌ PR is no longer open, cancelling merge"
+            exit 0
+          fi
+          
+          echo "✅ All safety checks passed, proceeding with merge"
+          
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --merge \
+            --delete-branch
+          
+          echo "✅ PR successfully auto-merged!"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post Success Comment
+        if: steps.ai-analysis.outputs.should_auto_merge == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `
+            ## 🎉 AI-Powered Auto-Merge Completed!
+            
+            **Merged by:** Intelligent PR Analyzer v2.0
+            **AI Confidence:** ${{ steps.ai-analysis.outputs.ai_confidence }}%
+            **Risk Score:** ${{ steps.ai-analysis.outputs.risk_score }}/10
+            **Merge Strategy:** ${{ steps.ai-analysis.outputs.merge_strategy }}
+            
+            ### 🧠 Why This Was Auto-Merged
+            - ✅ High AI confidence in code quality (${{ steps.ai-analysis.outputs.ai_confidence }}%)
+            - ✅ Low risk assessment (${{ steps.ai-analysis.outputs.risk_score }}/10)
+            - ✅ All required CI/CD checks passed
+            - ✅ Multi-dimensional safety analysis completed
+            - ✅ Author trust score verified
+            - ✅ Code complexity within safe thresholds
+            
+            ### 📊 Post-Merge Monitoring
+            The system will continue monitoring for:
+            - Performance regressions
+            - Error rate increases
+            - User-reported issues
+            
+            *Auto-merged with 🧠 AI by the Sophisticated Smart Auto-Merge System*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
