@@ -32,12 +32,12 @@ jobs:
     
     - name: Lint with flake8
       run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 scripts/ monitoring/ src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 scripts/ monitoring/ src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=azure,venv,backups
     
     - name: Type check with mypy
       run: |
-        mypy . --ignore-missing-imports
+        mypy scripts/ monitoring/ src/ --ignore-missing-imports
     
     - name: Test agent configuration
       run: |

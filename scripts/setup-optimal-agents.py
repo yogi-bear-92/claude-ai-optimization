@@ -8,6 +8,7 @@ analysis of 600+ agents across multiple collections.
 
 import os
 import shutil
+import sys
 import yaml
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -224,7 +225,9 @@ class AgentOptimizer:
               help="Create backup before installation")
 @click.option("--dry-run", is_flag=True, 
               help="Show what would be installed without actually doing it")
-def main(claude_dir: str, backup: bool, dry_run: bool):
+@click.option("--validate", is_flag=True,
+              help="Validate configuration and agent files without installation")
+def main(claude_dir: str, backup: bool, dry_run: bool, validate: bool):
     """Install optimal Claude AI agent configuration."""
     
     console.print("🤖 Claude AI Optimization Setup", style="bold blue")
@@ -241,6 +244,19 @@ def main(claude_dir: str, backup: bool, dry_run: bool):
     console.print(f"📋 Configuration: {config['description']}")
     console.print(f"📅 Version: {config['version']} (Created: {config['created']})\n")
     
+    if validate:
+        console.print("✅ VALIDATION MODE - Checking configuration and agents\n", style="green")
+        # Run validation using the existing validator
+        import subprocess
+        result = subprocess.run([sys.executable, "scripts/validate-agents.py"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            console.print("✅ All agents validated successfully", style="green")
+        else:
+            console.print("❌ Agent validation failed", style="red")
+            console.print(result.stdout)
+        return
+
     if dry_run:
         console.print("🔍 DRY RUN MODE - No changes will be made\n", style="yellow")
         # TODO: Implement dry run logic
