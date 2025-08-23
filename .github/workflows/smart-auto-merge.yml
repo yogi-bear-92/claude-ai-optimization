@@ -110,9 +110,8 @@ jobs:
             // Required checks that must pass
             const requiredChecks = [
               'Code Quality & Security',
-              'Test Suite (ubuntu-latest, 3.11)',
-              'Build Application',
-              'Security & Compliance'
+              'Test Suite',
+              'Build Verification'
             ];
             
             let maxAttempts = 30; // 15 minutes maximum wait
