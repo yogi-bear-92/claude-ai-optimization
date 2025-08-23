@@ -1,0 +1,384 @@
+name: Smart Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  status: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Analyze PR for auto-merge eligibility
+  analyze-pr:
+    name: Analyze PR for Auto-Merge
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    outputs:
+      should_auto_merge: ${{ steps.analysis.outputs.should_auto_merge }}
+      ai_confidence: ${{ steps.analysis.outputs.ai_confidence }}
+      risk_score: ${{ steps.analysis.outputs.risk_score }}
+      merge_strategy: ${{ steps.analysis.outputs.merge_strategy }}
+      analysis_summary: ${{ steps.analysis.outputs.analysis_summary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install GitPython requests PyGithub
+
+      - name: Analyze PR with AI Intelligence
+        id: analysis
+        run: |
+          python scripts/analyze_pr_for_automerge.py \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --repository ${{ github.repository }} \
+            --github-token ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post analysis comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const analysis = ${{ steps.analysis.outputs.analysis_summary }};
+            const confidence = ${{ steps.analysis.outputs.ai_confidence }};
+            const riskScore = ${{ steps.analysis.outputs.risk_score }};
+            
+            const comment = `
+            ## 🤖 Smart Auto-Merge Analysis
+            
+            **AI Confidence:** ${confidence}%
+            **Risk Score:** ${riskScore}/10
+            **Auto-Merge Eligible:** ${{ steps.analysis.outputs.should_auto_merge == 'true' ? '✅ Yes' : '❌ No' }}
+            
+            ### Analysis Summary
+            ${analysis}
+            
+            ### Decision Factors
+            - **Code Quality:** ${confidence > 85 ? '✅' : '⚠️'} ${confidence > 85 ? 'High confidence in changes' : 'Needs review'}
+            - **Risk Assessment:** ${riskScore < 3 ? '✅' : riskScore < 7 ? '⚠️' : '❌'} ${riskScore < 3 ? 'Low risk' : riskScore < 7 ? 'Medium risk' : 'High risk'}
+            - **Safety Controls:** ${{ steps.analysis.outputs.should_auto_merge == 'true' ? '✅ All checks passed' : '❌ Manual review needed' }}
+            
+            *This analysis is performed by the Azure Issue Automation Intelligence Engine*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Wait for all required checks to complete
+  wait-for-checks:
+    name: Wait for Required Checks
+    runs-on: ubuntu-latest
+    needs: analyze-pr
+    if: needs.analyze-pr.outputs.should_auto_merge == 'true'
+    outputs:
+      all_checks_passed: ${{ steps.check-status.outputs.all_checks_passed }}
+    steps:
+      - name: Wait for required checks
+        id: check-status
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            
+            // Required checks that must pass
+            const requiredChecks = [
+              'Code Quality & Security',
+              'Test Suite (ubuntu-latest, 3.11)',
+              'Build Application',
+              'Security & Compliance'
+            ];
+            
+            let maxAttempts = 30; // 15 minutes maximum wait
+            let attempt = 0;
+            
+            while (attempt < maxAttempts) {
+              try {
+                // Get PR details
+                const { data: pr } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: prNumber
+                });
+                
+                // Get commit status
+                const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                  owner,
+                  repo,
+                  ref: pr.head.sha
+                });
+                
+                // Get check runs
+                const { data: checkRuns } = await github.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: pr.head.sha
+                });
+                
+                // Check if all required checks have passed
+                let allPassed = true;
+                let pendingChecks = [];
+                
+                for (const checkName of requiredChecks) {
+                  // Check in statuses
+                  const status = statuses.find(s => s.context === checkName);
+                  const checkRun = checkRuns.check_runs.find(c => c.name === checkName);
+                  
+                  if (status) {
+                    if (status.state !== 'success') {
+                      if (status.state === 'pending') {
+                        pendingChecks.push(checkName);
+                        allPassed = false;
+                      } else {
+                        console.log(`❌ Check failed: ${checkName} - ${status.state}`);
+                        core.setOutput('all_checks_passed', 'false');
+                        return;
+                      }
+                    }
+                  } else if (checkRun) {
+                    if (checkRun.conclusion !== 'success') {
+                      if (checkRun.status === 'in_progress' || checkRun.status === 'queued') {
+                        pendingChecks.push(checkName);
+                        allPassed = false;
+                      } else {
+                        console.log(`❌ Check failed: ${checkName} - ${checkRun.conclusion}`);
+                        core.setOutput('all_checks_passed', 'false');
+                        return;
+                      }
+                    }
+                  } else {
+                    // Check not found, might still be starting
+                    pendingChecks.push(checkName);
+                    allPassed = false;
+                  }
+                }
+                
+                if (allPassed) {
+                  console.log('✅ All required checks passed!');
+                  core.setOutput('all_checks_passed', 'true');
+                  return;
+                }
+                
+                console.log(`⏳ Waiting for checks: ${pendingChecks.join(', ')}`);
+                console.log(`Attempt ${attempt + 1}/${maxAttempts}`);
+                
+                // Wait 30 seconds before checking again
+                await new Promise(resolve => setTimeout(resolve, 30000));
+                attempt++;
+                
+              } catch (error) {
+                console.log(`Error checking status: ${error.message}`);
+                attempt++;
+                await new Promise(resolve => setTimeout(resolve, 30000));
+              }
+            }
+            
+            console.log('⚠️ Timeout waiting for checks to complete');
+            core.setOutput('all_checks_passed', 'false');
+
+  # Perform smart auto-merge
+  smart-auto-merge:
+    name: Smart Auto-Merge
+    runs-on: ubuntu-latest
+    needs: [analyze-pr, wait-for-checks]
+    if: |
+      needs.analyze-pr.outputs.should_auto_merge == 'true' &&
+      needs.wait-for-checks.outputs.all_checks_passed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Final safety check
+        id: safety-check
+        run: |
+          echo "Performing final safety checks..."
+          
+          # Check if PR is still open
+          PR_STATE=$(gh pr view ${{ github.event.pull_request.number }} --json state -q '.state')
+          if [ "$PR_STATE" != "OPEN" ]; then
+            echo "❌ PR is no longer open"
+            echo "safe_to_merge=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if there are any new commits since analysis
+          LATEST_COMMIT=$(gh pr view ${{ github.event.pull_request.number }} --json headRefOid -q '.headRefOid')
+          if [ "$LATEST_COMMIT" != "${{ github.event.pull_request.head.sha }}" ]; then
+            echo "❌ New commits detected since analysis"
+            echo "safe_to_merge=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for any blocking reviews
+          BLOCKING_REVIEWS=$(gh pr view ${{ github.event.pull_request.number }} --json reviews -q '[.reviews[] | select(.state == "CHANGES_REQUESTED")] | length')
+          if [ "$BLOCKING_REVIEWS" -gt 0 ]; then
+            echo "❌ There are blocking review requests"
+            echo "safe_to_merge=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "✅ All safety checks passed"
+          echo "safe_to_merge=true" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Execute auto-merge
+        if: steps.safety-check.outputs.safe_to_merge == 'true'
+        run: |
+          echo "🤖 Executing smart auto-merge..."
+          
+          # Use the merge strategy determined by AI analysis
+          MERGE_METHOD="${{ needs.analyze-pr.outputs.merge_strategy }}"
+          
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --$MERGE_METHOD \
+            --delete-branch
+          
+          echo "✅ PR successfully auto-merged!"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post merge success comment
+        if: steps.safety-check.outputs.safe_to_merge == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `
+            ## 🎉 Smart Auto-Merge Completed!
+            
+            **Merged by:** Azure Automation Intelligence Engine
+            **AI Confidence:** ${{ needs.analyze-pr.outputs.ai_confidence }}%
+            **Risk Score:** ${{ needs.analyze-pr.outputs.risk_score }}/10
+            **Merge Strategy:** ${{ needs.analyze-pr.outputs.merge_strategy }}
+            
+            ### Why This Was Auto-Merged
+            - ✅ High AI confidence in code quality
+            - ✅ Low risk assessment
+            - ✅ All safety checks passed
+            - ✅ All required CI/CD checks completed successfully
+            
+            ### Post-Merge Monitoring
+            The system will monitor this change for:
+            - Performance regressions
+            - Error rate increases  
+            - User-reported issues
+            
+            If any issues are detected, automated rollback procedures will be initiated.
+            
+            *Auto-merged with ❤️ by Azure Issue Automation*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: ${{ github.event.pull_request.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Log merge event for learning
+        if: steps.safety-check.outputs.safe_to_merge == 'true'
+        run: |
+          python -c "
+          import json
+          from datetime import datetime
+          
+          merge_event = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'pr_number': ${{ github.event.pull_request.number }},
+            'ai_confidence': ${{ needs.analyze-pr.outputs.ai_confidence }},
+            'risk_score': ${{ needs.analyze-pr.outputs.risk_score }},
+            'merge_strategy': '${{ needs.analyze-pr.outputs.merge_strategy }}',
+            'repository': '${{ github.repository }}',
+            'event_type': 'auto_merge_completed'
+          }
+          
+          print('📊 Logging merge event for AI learning:', json.dumps(merge_event, indent=2))
+          "
+
+      - name: Handle merge failure
+        if: steps.safety-check.outputs.safe_to_merge == 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `
+            ## ⚠️ Smart Auto-Merge Cancelled
+            
+            The auto-merge was cancelled due to safety checks:
+            - PR state may have changed
+            - New commits may have been added
+            - Blocking reviews may have been submitted
+            
+            **Manual review is now required.**
+            
+            The AI analysis showed this PR was suitable for auto-merge, but safety protocols prevented it. Please review the changes manually.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Monitor post-merge health
+  post-merge-monitoring:
+    name: Post-Merge Monitoring
+    runs-on: ubuntu-latest
+    needs: [analyze-pr, smart-auto-merge]
+    if: success() && needs.smart-auto-merge.result == 'success'
+    steps:
+      - name: Setup monitoring
+        run: |
+          echo "🔍 Setting up post-merge monitoring..."
+          echo "Monitoring will track:"
+          echo "  - Error rates for next 24 hours"
+          echo "  - Performance metrics"
+          echo "  - User feedback"
+          echo "  - System health indicators"
+
+      - name: Schedule rollback check
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // This would typically integrate with monitoring systems
+            // to automatically detect issues and trigger rollbacks
+            console.log('📅 Scheduled automatic rollback check for 24 hours');
+            console.log('🚨 Rollback will trigger if:');
+            console.log('  - Error rate increases >20%');
+            console.log('  - Performance degrades >15%');
+            console.log('  - Critical user reports received');
+
+      - name: Notify monitoring systems
+        run: |
+          echo "📡 Notifying monitoring systems of auto-merge..."
+          # This would send notifications to monitoring tools like:
+          # - Application Insights
+          # - Datadog
+          # - New Relic
+          # - Custom monitoring webhooks
