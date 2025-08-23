@@ -44,12 +44,13 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          cd azure && pip install -r requirements.txt
           pip install GitPython requests PyGithub
 
       - name: Analyze PR with AI Intelligence
         id: analysis
         run: |
-          python scripts/analyze_pr_for_automerge.py \
+          python azure/scripts/analyze_pr_for_automerge.py \
             --pr-number ${{ github.event.pull_request.number }} \
             --repository ${{ github.repository }} \
             --github-token ${{ secrets.GITHUB_TOKEN }}
