@@ -3,11 +3,6 @@ name: Smart Auto-Merge
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  pull_request_review:
-    types: [submitted]
-  check_suite:
-    types: [completed]
-  status: {}
 
 permissions:
   contents: write
