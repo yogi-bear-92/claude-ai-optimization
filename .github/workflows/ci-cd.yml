@@ -52,7 +52,7 @@ jobs:
 
       - name: Security scanning
         run: |
-          bandit -r . -x tests/
+          bandit -r . -x azure/tests/
           safety check
           
       - name: License check
@@ -87,17 +87,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-test.txt
+          pip install -r azure/requirements.txt
+          pip install -r azure/requirements-dev.txt
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=html
+          pytest azure/tests/unit/ -v --cov=src --cov-report=xml --cov-report=html
         env:
           PYTEST_ARGS: --maxfail=1
 
       - name: Run integration tests
         run: |
-          pytest tests/integration/ -v --slow
+          pytest azure/tests/integration/ -v --slow
         env:
           TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
           TEST_REPOSITORY: ${{ github.repository }}
@@ -137,12 +138,12 @@ jobs:
 
       - name: Run performance benchmarks
         run: |
-          pytest tests/performance/ --benchmark-only --benchmark-json=benchmark.json
+          pytest azure/tests/performance/ --benchmark-only --benchmark-json=benchmark.json
 
       - name: Run load tests
         run: |
-          python -m locust -f tests/load/locustfile.py --headless --users=50 --spawn-rate=5 -H http://localhost:8000 -t 60s &
-          python app-simple.py &
+          python -m locust -f azure/tests/load/locustfile.py --headless --users=50 --spawn-rate=5 -H http://localhost:8000 -t 60s &
+          python azure/app-simple.py &
           sleep 10
           curl -f http://localhost:8000/health || exit 1
 
@@ -386,7 +387,7 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          pytest tests/e2e/ \
+          pytest azure/tests/e2e/ \
             --base-url=https://${{ matrix.environment == 'staging' && 'staging-' || '' }}azure-automation.example.com \
             --github-token=${{ matrix.environment == 'staging' && secrets.STAGING_GITHUB_TOKEN || secrets.PRODUCTION_GITHUB_TOKEN }}
         env:
@@ -464,12 +465,12 @@ jobs:
 
       - name: Load testing with k6
         run: |
-          docker run --rm -v $PWD/tests/load:/scripts grafana/k6 run /scripts/load-test.js --env BASE_URL=https://azure-automation.example.com
+          docker run --rm -v $PWD/azure/tests/load:/scripts grafana/k6 run /scripts/load-test.js --env BASE_URL=https://azure-automation.example.com
 
       - name: API performance testing
         run: |
           npm install -g newman
-          newman run tests/postman/azure-automation.postman_collection.json \
-            --environment tests/postman/production.postman_environment.json \
+          newman run azure/tests/postman/azure-automation.postman_collection.json \
+            --environment azure/tests/postman/production.postman_environment.json \
             --reporters html,json \
             --reporter-html-export performance-report.html
