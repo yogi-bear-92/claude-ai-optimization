@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          cd azure && pip install -r requirements.txt
+          pip install -r azure/requirements-dev.txt
           pip install GitPython requests PyGithub
 
       - name: Analyze PR with AI Intelligence
