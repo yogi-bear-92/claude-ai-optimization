@@ -1,0 +1,474 @@
+name: Azure Issue Automation CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  release:
+    types: [created]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/azure-automation
+
+jobs:
+  # Code quality and security checks
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Code formatting check
+        run: |
+          black --check --diff .
+          isort --check-only --diff .
+
+      - name: Linting
+        run: |
+          flake8 .
+          pylint **/*.py --disable=C0114,C0115,C0116
+
+      - name: Type checking
+        run: mypy . --ignore-missing-imports
+
+      - name: Security scanning
+        run: |
+          bandit -r . -x tests/
+          safety check
+          
+      - name: License check
+        run: |
+          pip-licenses --format=table --allow-only="MIT;Apache Software License;BSD License;Apache 2.0;BSD"
+
+      - name: Vulnerability scanning with Snyk
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  # Unit and integration tests
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=html
+        env:
+          PYTEST_ARGS: --maxfail=1
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v --slow
+        env:
+          TEST_GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+          TEST_REPOSITORY: ${{ github.repository }}
+
+      - name: Run intelligence engine tests
+        run: |
+          python test_intelligence_integration.py
+          python test_self_improvement_integration.py
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # Performance and load tests
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install locust pytest-benchmark
+
+      - name: Run performance benchmarks
+        run: |
+          pytest tests/performance/ --benchmark-only --benchmark-json=benchmark.json
+
+      - name: Run load tests
+        run: |
+          python -m locust -f tests/load/locustfile.py --headless --users=50 --spawn-rate=5 -H http://localhost:8000 -t 60s &
+          python app-simple.py &
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+  # Build and containerize
+  build:
+    name: Build Application
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [development, staging, production]
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-${{ matrix.environment }}
+            type=ref,event=pr,suffix=-${{ matrix.environment }}
+            type=sha,suffix=-${{ matrix.environment }}
+            type=raw,value=${{ matrix.environment }}-latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ENVIRONMENT=${{ matrix.environment }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VCS_REF=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.meta.outputs.tags }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom-${{ matrix.environment }}
+          path: sbom.spdx.json
+
+  # Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging-azure-automation.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Container Instances
+        run: |
+          az container create \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name azure-automation-staging \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --cpu 2 \
+            --memory 4 \
+            --restart-policy OnFailure \
+            --ports 8000 \
+            --dns-name-label azure-automation-staging \
+            --environment-variables \
+              ENVIRONMENT=staging \
+              GITHUB_TOKEN=${{ secrets.STAGING_GITHUB_TOKEN }} \
+              WEBHOOK_SECRET=${{ secrets.STAGING_WEBHOOK_SECRET }}
+
+      - name: Run smoke tests
+        run: |
+          sleep 30
+          curl -f https://staging-azure-automation.example.com/health
+          curl -f https://staging-azure-automation.example.com/stats
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: Staging deployment ${{ job.status }} for commit ${{ github.sha }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://azure-automation.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Blue-Green Deployment
+        run: |
+          # Deploy to green slot
+          az container create \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name azure-automation-green \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --cpu 4 \
+            --memory 8 \
+            --restart-policy OnFailure \
+            --ports 8000 \
+            --environment-variables \
+              ENVIRONMENT=production \
+              GITHUB_TOKEN=${{ secrets.PRODUCTION_GITHUB_TOKEN }} \
+              WEBHOOK_SECRET=${{ secrets.PRODUCTION_WEBHOOK_SECRET }}
+          
+          # Wait for green deployment
+          sleep 60
+          
+          # Health check green slot
+          GREEN_IP=$(az container show --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --name azure-automation-green --query ipAddress.ip -o tsv)
+          curl -f http://$GREEN_IP:8000/health
+          
+          # Switch traffic (update DNS/load balancer)
+          az network traffic-manager endpoint update \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --profile-name azure-automation-tm \
+            --name production-endpoint \
+            --type azureEndpoints \
+            --target-resource-id $(az container show --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --name azure-automation-green --query id -o tsv)
+          
+          # Clean up old blue deployment
+          sleep 60
+          az container delete --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --name azure-automation-blue --yes || true
+
+      - name: Run production smoke tests
+        run: |
+          curl -f https://azure-automation.example.com/health
+          curl -f https://azure-automation.example.com/stats
+          curl -f https://azure-automation.example.com/intelligence/stats
+
+      - name: Update monitoring
+        run: |
+          # Update monitoring dashboards
+          az monitor app-insights component update \
+            --app azure-automation \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --tags "version=${{ github.sha }}" "deployment-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Notify production deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            🚀 Production deployment ${{ job.status }}
+            Version: ${{ github.sha }}
+            Image: ${{ needs.build.outputs.image-tag }}
+            URL: https://azure-automation.example.com
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Post-deployment verification
+  e2e-tests:
+    name: End-to-End Tests
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    strategy:
+      matrix:
+        environment: [staging, production]
+        exclude:
+          - environment: staging
+            condition: ${{ needs.deploy-staging.result != 'success' }}
+          - environment: production
+            condition: ${{ needs.deploy-production.result != 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: |
+          pip install playwright pytest requests
+          playwright install
+
+      - name: Run E2E tests
+        run: |
+          pytest tests/e2e/ \
+            --base-url=https://${{ matrix.environment == 'staging' && 'staging-' || '' }}azure-automation.example.com \
+            --github-token=${{ matrix.environment == 'staging' && secrets.STAGING_GITHUB_TOKEN || secrets.PRODUCTION_GITHUB_TOKEN }}
+        env:
+          PLAYWRIGHT_HEADLESS: true
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-results-${{ matrix.environment }}
+          path: |
+            test-results/
+            playwright-report/
+
+  # Security and compliance
+  security-scan:
+    name: Security & Compliance
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run SAST with Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+            p/owasp-top-ten
+
+      - name: Run container security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build.outputs.image-tag }}
+          format: 'json'
+          output: 'container-scan.json'
+
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'azure-automation'
+          path: '.'
+          format: 'ALL'
+          args: >
+            --enableRetired
+            --enableExperimental
+            --nvdValidHours 24
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            container-scan.json
+            reports/
+
+  # Performance monitoring
+  performance-monitoring:
+    name: Performance Monitoring
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    if: needs.deploy-production.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v9
+        with:
+          urls: |
+            https://azure-automation.example.com
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Load testing with k6
+        run: |
+          docker run --rm -v $PWD/tests/load:/scripts grafana/k6 run /scripts/load-test.js --env BASE_URL=https://azure-automation.example.com
+
+      - name: API performance testing
+        run: |
+          npm install -g newman
+          newman run tests/postman/azure-automation.postman_collection.json \
+            --environment tests/postman/production.postman_environment.json \
+            --reporters html,json \
+            --reporter-html-export performance-report.html
